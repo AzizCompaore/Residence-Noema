@@ -14,5 +14,11 @@ class FAQItemViewSet(viewsets.ModelViewSet):
     serializer_class = FAQItemSerializer
     pagination_class = None
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.request.user.is_authenticated or not self.request.user.is_staff:
+            queryset = queryset.filter(is_published=True)
+        return queryset
+
     def get_permissions(self):
         return [] if self.request.method in ('GET', 'HEAD', 'OPTIONS') else [IsAdminUser()]

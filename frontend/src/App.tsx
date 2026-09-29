@@ -21,6 +21,9 @@ import { UrielGroupTransitionPage } from './components/UrielGroupTransitionPage'
 import { LoginPage } from './components/LoginPage';
 import { LoadingScreen } from './components/LoadingScreen';
 import { RevealSection, ScrollProgress } from './components/ScrollExperience';
+import { CookieConsent } from './components/CookieConsent';
+import { LegalPage } from './components/LegalPage';
+import { ErrorPage } from './components/ErrorPage';
 
 import { Apartment, ResidenceInfo, ConstructionMilestone, FAQItem } from './types';
 import { fetchResidence, fetchApartments, fetchConstructionMilestones, fetchFAQs, getCurrentUser, logoutUser, AuthUser } from './services/api';
@@ -32,7 +35,7 @@ export function App() {
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [milestones, setMilestones] = useState<ConstructionMilestone[]>([]);
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !['/politique-de-confidentialite', '/mentions-legales', '/politique-des-cookies', '/404', '/403', '/500'].includes(window.location.pathname.replace(/\/+$/, '') || '/'));
 
   // Modals and UI State
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
@@ -44,6 +47,9 @@ export function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [user, setUser] = useState<AuthUser | null>(null);
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  const legalKind = path === '/politique-de-confidentialite' ? 'privacy' : path === '/mentions-legales' ? 'legal' : path === '/politique-des-cookies' ? 'cookies' : null;
+  const errorStatus = path === '/404' ? 404 : path === '/403' ? 403 : path === '/500' ? 500 : null;
 
   const refreshUser = async () => {
     const currentUser = await getCurrentUser();
@@ -52,6 +58,7 @@ export function App() {
   };
 
   useEffect(() => {
+    if (legalKind || errorStatus) return;
     // Capture and save any UTM campaign parameters
     captureUTMParams();
 
@@ -130,11 +137,13 @@ export function App() {
 
       {loading && <LoadingScreen />}
       
-      {!loading && showLogin ? (
+      {legalKind ? <LegalPage kind={legalKind} /> : null}
+      {errorStatus ? <ErrorPage status={errorStatus} /> : null}
+      {!legalKind && !errorStatus && !loading && showLogin ? (
         <LoginPage onBackToSite={() => { setLoginError(''); setShowLogin(false); }} onAuthenticated={async () => { await refreshUser(); setLoginError(''); setShowLogin(false); }} initialError={loginError} />
-      ) : !loading && showUrielGroup ? (
+      ) : !legalKind && !errorStatus && !loading && showUrielGroup ? (
         <UrielGroupTransitionPage onBackToNoema={() => setShowUrielGroup(false)} onOpenVisioAppointment={() => setIsVisioAppointmentOpen(true)} />
-      ) : !loading ? (
+      ) : !legalKind && !errorStatus && !loading ? (
         <>
           {/* Main Top Header */}
           <Header
@@ -239,6 +248,7 @@ export function App() {
         isOpen={isVisioAppointmentOpen}
         onClose={() => setIsVisioAppointmentOpen(false)}
       />
+      <CookieConsent />
 
     </div>
   );

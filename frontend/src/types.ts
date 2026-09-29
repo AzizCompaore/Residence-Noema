@@ -104,12 +104,30 @@ export interface SimulationResult {
   duration_years: number;
   interest_rate: number;
   monthly_payment: number;
+  rental_occupied_days: number;
+  rental_daily_rate_eur: number;
+  rental_gross_income_eur: number;
+  rental_structure_share_eur: number;
+  rental_owner_income_eur: number;
+  rental_owner_income: number;
+  rental_recognition_rate: number;
+  rental_recognized_income: number;
+  rental_property_charges: number;
+  rental_cash_flow: number;
+  rental_effort: number;
+  personal_income: number;
   monthly_income: number;
   existing_loans: number;
   available_monthly_income: number;
   recommended_monthly_budget: number;
   loan_to_value_percent: number;
   debt_ratio_percent: number;
+  debt_ratio_threshold: number;
+  total_monthly_commitment: number;
+  minimum_income_required: number;
+  debt_ratio_gap: number;
+  living_expenses: number;
+  remaining_income: number;
   is_debt_ratio_healthy: boolean;
 }
 

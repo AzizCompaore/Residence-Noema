@@ -11,7 +11,7 @@ interface FinalCTASectionProps {
 export const FinalCTASection: React.FC<FinalCTASectionProps> = ({
   onOpenSimulator,
   onOpenVisioAppointment,
-  whatsappNumber = '+2250789001122'
+  whatsappNumber = '+377678630862'
 }) => {
   const whatsappUrl = buildWhatsAppURL(
     whatsappNumber,

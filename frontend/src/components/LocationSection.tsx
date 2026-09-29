@@ -62,13 +62,7 @@ export const LocationSection: React.FC = () => {
               </div>
               <span className="shrink-0 text-xs font-semibold text-emerald-800">Carte du quartier</span>
             </div>
-            <iframe
-              title="Carte de localisation de la Résidence NOEMA"
-              src={mapEmbedUrl}
-              className="h-[500px] w-full border-0"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
+            <iframe title="Carte de localisation de la Résidence NOEMA" src={mapEmbedUrl} className="h-[500px] w-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
             <div className="flex items-center gap-2 bg-neutral-50 px-5 py-3 text-xs text-neutral-600">
               <MapPin className="h-4 w-4 shrink-0 text-emerald-700" />
               <span>Coordonnées vérifiées : 5°23'59.3&quot;N, 3°56'36.8&quot;W</span>

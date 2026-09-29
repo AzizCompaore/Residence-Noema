@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import { Readable } from 'stream';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { 
@@ -11,14 +12,19 @@ import {
   LeadSubmission, 
   SimulationResult 
 } from './frontend/src/types';
+import { calculateFinancing, financingConfig } from './frontend/src/services/financing';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 dotenv.config({ path: path.resolve(process.cwd(), '..', '.env'), override: false });
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const DJANGO_API_URL = process.env.DJANGO_API_URL || 'http://127.0.0.1:8000/api';
+const TRUST_PROXY_HOPS = process.env.TRUST_PROXY_HOPS === undefined
+  ? process.env.NODE_ENV === 'production' ? 1 : false
+  : Number(process.env.TRUST_PROXY_HOPS);
 const DJANGO_BASE_URL = DJANGO_API_URL.replace(/\/api\/?$/, '');
+const MEDIA_ROOT = path.resolve(process.env.MEDIA_ROOT || 'backend/media');
 const TOTAL_DELIVERY_MONTHS = 30;
 const COMPLETED_DELIVERY_MONTHS = 2;
 const REMAINING_DELIVERY_MONTHS = Math.max(TOTAL_DELIVERY_MONTHS - COMPLETED_DELIVERY_MONTHS, 0);
@@ -30,12 +36,71 @@ const DELIVERY_DATE_LABEL = ESTIMATED_DELIVERY_DATE.toLocaleDateString('fr-FR', 
   year: 'numeric',
   timeZone: 'UTC'
 });
+app.set('trust proxy', TRUST_PROXY_HOPS);
+
+async function proxyDjango(req: Request, res: Response): Promise<void> {
+  try {
+    const headers: Record<string, string> = {};
+    for (const name of ['cookie', 'content-type', 'x-csrftoken', 'origin', 'referer']) {
+      const value = req.headers[name];
+      if (value) headers[name] = Array.isArray(value) ? value.join(', ') : value;
+    }
+    headers['x-forwarded-host'] = req.get('host') || '';
+    headers['x-forwarded-proto'] = req.protocol;
+
+    const hasBody = !['GET', 'HEAD'].includes(req.method);
+    const response = await fetch(`${DJANGO_BASE_URL}${req.originalUrl}`, {
+      method: req.method,
+      headers,
+      body: hasBody ? req as unknown as BodyInit : undefined,
+      ...(hasBody ? { duplex: 'half' } : {})
+    } as RequestInit);
+
+    for (const name of ['content-type', 'cache-control', 'location', 'expires', 'last-modified', 'etag']) {
+      const value = response.headers.get(name);
+      if (value) res.setHeader(name, value);
+    }
+    const responseHeaders = response.headers as Headers & { getSetCookie?: () => string[] };
+    const setCookies = responseHeaders.getSetCookie?.() || (response.headers.get('set-cookie') ? [response.headers.get('set-cookie') as string] : []);
+    if (setCookies?.length) res.setHeader('set-cookie', setCookies);
+    res.status(response.status);
+    if (response.body) Readable.fromWeb(response.body as import('stream/web').ReadableStream).pipe(res);
+    else res.end();
+  } catch {
+    if (!res.headersSent) res.status(502).send('Le service Django est momentanément indisponible.');
+    else res.destroy();
+  }
+}
+
+app.use('/admin', proxyDjango);
+app.use('/static', proxyDjango);
+app.use('/media', express.static(MEDIA_ROOT, { fallthrough: false, index: false }));
 
 app.use(express.json());
 
-app.use('/admin', (req: Request, res: Response) => {
-  res.redirect(`${DJANGO_BASE_URL}${req.originalUrl}`);
-});
+async function requireStaff(req: Request, res: Response, next: () => void): Promise<void> {
+  try {
+    const response = await fetch(`${DJANGO_API_URL}/auth/me/`, {
+      headers: req.headers.cookie ? { cookie: req.headers.cookie } : {}
+    });
+    if (!response.ok) {
+      res.status(502).json({ success: false, error: 'Le service d’authentification est momentanément indisponible.' });
+      return;
+    }
+    const payload = await response.json() as { authenticated?: boolean; user?: { is_staff?: boolean } | null };
+    if (!payload.authenticated || !payload.user) {
+      res.status(401).json({ success: false, error: 'Authentification requise.' });
+      return;
+    }
+    if (!payload.user.is_staff) {
+      res.status(403).json({ success: false, error: 'Accès réservé à l’équipe.' });
+      return;
+    }
+    next();
+  } catch {
+    res.status(502).json({ success: false, error: 'Le service d’authentification est momentanément indisponible.' });
+  }
+}
 
 app.use('/api/auth', async (req: Request, res: Response) => {
   try {
@@ -59,6 +124,7 @@ app.use('/api/auth', async (req: Request, res: Response) => {
     if (setCookies?.length) res.setHeader('set-cookie', setCookies);
     const location = response.headers.get('location');
     if (location) res.setHeader('location', location);
+    res.setHeader('content-type', response.headers.get('content-type') || 'application/json');
     res.status(response.status).send(await response.text());
   } catch {
     res.status(502).json({ error: 'Le service d’authentification est momentanément indisponible.' });
@@ -70,7 +136,8 @@ async function getDjangoCollection<T>(resource: string): Promise<T[] | null> {
     const response = await fetch(`${DJANGO_API_URL}/${resource}/`);
     if (!response.ok) return null;
     const payload = await response.json();
-    return Array.isArray(payload) ? payload as T[] : null;
+    if (Array.isArray(payload)) return payload as T[];
+    return Array.isArray(payload?.results) ? payload.results as T[] : null;
   } catch {
     return null;
   }
@@ -91,12 +158,12 @@ let residenceData: ResidenceInfo = {
   delivery_date_estimated: DELIVERY_DATE_LABEL,
   status: 'Chantier en cours — Structure & Gros Œuvre',
   hero_image: '/images/noema%20façade.webp',
-  whatsapp_number: '+2250789001122',
+  whatsapp_number: '+377678630862',
   phone_number: '+225 27 22 00 11 22',
-  email_contact: 'contact@laresidencenoema.com',
+  email_contact: 'finance@urielgroup.fr',
   financing_partners: 'BHCI — partenariat VEFA confirmé. Autres banques à vérifier.',
   financing_notes: "Taux, apport minimum, durée de prêt et seuil d'endettement à confirmer.",
-  indicative_interest_rate: 6.5,
+  indicative_interest_rate: financingConfig.annualInterestRate * 100,
   indicative_debt_ratio_limit: 35.0,
   address_details: 'Angré Djorogobité, à 5 min du Boulevard Latrille et à proximité des grands axes vers Cocody et le Plateau, Abidjan.',
   gps_coordinates: {
@@ -513,77 +580,80 @@ app.get('/api/faq', async (req: Request, res: Response) => {
 });
 
 // 6. Financial Simulation Calculation Endpoint
-app.post('/api/simulations/calculate', (req: Request, res: Response) => {
+app.post('/api/simulations/calculate', async (req: Request, res: Response) => {
   try {
     const {
       apartment_id,
       apartment_price,
       down_payment = 0,
-      duration_years = 8,
+      duration_years = financingConfig.durationYears,
       monthly_net_income = 0,
       existing_monthly_loans = 0,
       additional_monthly_income = 0,
       co_borrower_monthly_income = 0,
-      interest_rate = residenceData.indicative_interest_rate
+      property_charges = 0,
+      living_expenses = financingConfig.livingExpenses,
+      rental_income_recognition_rate = financingConfig.rentalIncomeRecognitionRate
     } = req.body;
 
+    const djangoApartments = await getDjangoCollection<any>('apartments');
+    const djangoApartment = djangoApartments?.find(apartment =>
+      apartment.is_public !== false
+      && (String(apartment.id) === String(apartment_id) || apartment.reference === apartment_id)
+    );
     const apt = apartmentsData.find(a => a.id === apartment_id);
-    const finalPrice = apt ? apt.price_fcfa : (Number(apartment_price) || 59000000);
-    const downPayment = Math.min(finalPrice, Math.max(0, Number(down_payment) || 0));
-    const loanAmount = Math.max(0, finalPrice - downPayment);
-
-    // Standard Amortization Formula: M = P * [ r*(1+r)^n ] / [ (1+r)^n - 1 ]
-    const annualRateDecimal = (Number(interest_rate) || 6.5) / 100;
-    const monthlyRate = annualRateDecimal / 12;
-    const safeDurationYears = Math.min(8, Math.max(1, Number(duration_years) || 8));
-    const totalMonths = safeDurationYears * 12;
-
-    let monthlyPayment = 0;
-    if (loanAmount > 0) {
-      if (monthlyRate > 0) {
-        monthlyPayment = Math.round(
-          (loanAmount * monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) /
-          (Math.pow(1 + monthlyRate, totalMonths) - 1)
-        );
-      } else {
-        monthlyPayment = Math.round(loanAmount / totalMonths);
-      }
-    }
-
-    const income = Math.max(0, Number(monthly_net_income) || 0)
-      + Math.max(0, Number(additional_monthly_income) || 0)
-      + Math.max(0, Number(co_borrower_monthly_income) || 0);
-    const existingLoans = Number(existing_monthly_loans) || 0;
-    const availableMonthlyIncome = Math.max(0, income - existingLoans);
-    const recommendedMonthlyBudget = Math.round(availableMonthlyIncome * residenceData.indicative_debt_ratio_limit / 100);
-    const loanToValuePercent = finalPrice > 0 ? Math.round((loanAmount / finalPrice) * 100) : 0;
-    const totalMonthlyCommitment = monthlyPayment + existingLoans;
-    
-    let debtRatioPercent = 0;
-    if (income > 0) {
-      debtRatioPercent = Math.round((totalMonthlyCommitment / income) * 100 * 10) / 10;
-    }
-
-    const isDebtRatioHealthy = debtRatioPercent > 0 
-      ? debtRatioPercent <= residenceData.indicative_debt_ratio_limit 
-      : true;
+    const finalPrice = djangoApartment
+      ? Number(djangoApartment.price_fcfa)
+      : apt ? apt.price_fcfa : (Number(apartment_price) || 59000000);
+    const calculation = calculateFinancing({
+      propertyType: djangoApartment?.apartment_type || apt?.type || 't2',
+      propertyPrice: finalPrice,
+      downPayment: Number(down_payment) || 0,
+      durationYears: Number(duration_years),
+      primaryIncome: Number(monthly_net_income) || 0,
+      additionalIncome: Number(additional_monthly_income) || 0,
+      coBorrowerIncome: Number(co_borrower_monthly_income) || 0,
+      existingCreditPayments: Number(existing_monthly_loans) || 0,
+      propertyCharges: Number(property_charges) || 0,
+      livingExpenses: Number(living_expenses) || 0,
+      rentalIncomeRecognitionRate: Number(rental_income_recognition_rate)
+    });
+    const { financing, rental, solvency } = calculation;
 
     const result: SimulationResult = {
-      apartment_id: apt?.id,
-      apartment_ref: apt?.ref,
+      apartment_id: djangoApartment ? String(djangoApartment.id) : apt?.id,
+      apartment_ref: djangoApartment?.reference || apt?.ref,
       apartment_price: finalPrice,
-      down_payment: downPayment,
-      loan_amount: loanAmount,
-      duration_years: safeDurationYears,
-      interest_rate: Number(interest_rate),
-      monthly_payment: monthlyPayment,
-      monthly_income: income,
-      existing_loans: existingLoans,
-      available_monthly_income: availableMonthlyIncome,
-      recommended_monthly_budget: recommendedMonthlyBudget,
-      loan_to_value_percent: loanToValuePercent,
-      debt_ratio_percent: debtRatioPercent,
-      is_debt_ratio_healthy: isDebtRatioHealthy
+      down_payment: financing.downPayment,
+      loan_amount: financing.borrowedAmount,
+      duration_years: financing.durationYears,
+      interest_rate: financing.annualInterestRate * 100,
+      monthly_payment: financing.monthlyPayment,
+      rental_occupied_days: rental.occupiedDays,
+      rental_daily_rate_eur: rental.dailyRateEur,
+      rental_gross_income_eur: rental.grossIncomeEur,
+      rental_structure_share_eur: rental.structureShareEur,
+      rental_owner_income_eur: rental.ownerIncomeEur,
+      rental_owner_income: rental.ownerIncomeFcfa,
+      rental_recognition_rate: rental.recognitionRate,
+      rental_recognized_income: rental.recognizedIncomeFcfa,
+      rental_property_charges: rental.propertyCharges,
+      rental_cash_flow: rental.cashFlow,
+      rental_effort: rental.effort,
+      monthly_income: solvency.retainedIncome,
+      personal_income: solvency.personalIncome,
+      existing_loans: solvency.existingCreditPayments,
+      available_monthly_income: solvency.remainingIncome,
+      recommended_monthly_budget: Math.round(solvency.retainedIncome * financingConfig.maxDebtRatio),
+      loan_to_value_percent: financing.propertyPrice > 0 ? Math.round((financing.borrowedAmount / financing.propertyPrice) * 100) : 0,
+      debt_ratio_percent: Math.round(solvency.debtRatio * 10) / 10,
+      debt_ratio_threshold: solvency.threshold,
+      total_monthly_commitment: solvency.totalCommitments,
+      minimum_income_required: solvency.minimumIncomeRequired,
+      debt_ratio_gap: solvency.debtRatioGap,
+      living_expenses: solvency.livingExpenses,
+      remaining_income: solvency.remainingIncome,
+      is_debt_ratio_healthy: solvency.status === 'within_threshold'
     };
 
     res.json({
@@ -599,9 +669,12 @@ app.post('/api/simulations/calculate', (req: Request, res: Response) => {
 // 7. Lead Capture: Django is the persistent source of truth.
 app.post('/api/leads', async (req: Request, res: Response) => {
   try {
+    const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
+    if (req.headers.cookie) headers.cookie = req.headers.cookie;
+    if (req.headers['x-csrftoken']) headers['x-csrftoken'] = String(req.headers['x-csrftoken']);
     const response = await fetch(`${DJANGO_API_URL}/leads/`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      headers,
       body: JSON.stringify(req.body),
     });
     const payload = await response.text();
@@ -611,13 +684,17 @@ app.post('/api/leads', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/appointments', (req: Request, res: Response) => {
-  const { first_name, last_name, email, phone_whatsapp, appointment_date, appointment_time, timezone } = req.body;
+app.post('/api/appointments', async (req: Request, res: Response) => {
+  const { first_name, last_name, email, phone_whatsapp, appointment_date, appointment_time, timezone, appointment_mode, consent_data_processing, website } = req.body;
   const today = new Date();
   const todayValue = today.toISOString().slice(0, 10);
   const lastAvailableDate = new Date(today.getTime() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  if (!first_name || !last_name || !email || !phone_whatsapp || !appointment_date || !appointment_time) {
+  if (!first_name || !last_name || !email || !phone_whatsapp || !appointment_date || !appointment_time || consent_data_processing !== true || String(website || '').trim()) {
     res.status(400).json({ success: false, error: 'Tous les champs du rendez-vous sont obligatoires.' });
+    return;
+  }
+  if (appointment_mode !== 'visio' && appointment_mode !== 'presentiel') {
+    res.status(400).json({ success: false, error: 'Choisissez un type de rendez-vous valide.' });
     return;
   }
   const [appointmentHour, appointmentMinute] = String(appointment_time).split(':').map(Number);
@@ -626,6 +703,36 @@ app.post('/api/appointments', (req: Request, res: Response) => {
     && !(appointmentHour >= 12 && appointmentHour < 14);
   if (appointment_date < todayValue || appointment_date > lastAvailableDate || !isWorkingHour) {
     res.status(400).json({ success: false, error: 'Choisissez une date dans les 7 prochains jours et un créneau ouvré proposé.' });
+    return;
+  }
+
+  try {
+    const appointmentHeaders: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
+    if (req.headers.cookie) appointmentHeaders.cookie = req.headers.cookie;
+    if (req.headers['x-csrftoken']) appointmentHeaders['x-csrftoken'] = String(req.headers['x-csrftoken']);
+    const notificationResponse = await fetch(`${DJANGO_API_URL}/leads/appointment-notification/`, {
+      method: 'POST',
+      headers: appointmentHeaders,
+      body: JSON.stringify({
+        first_name,
+        last_name,
+        email,
+        phone_whatsapp,
+        appointment_date,
+        appointment_time,
+        appointment_mode,
+        timezone: timezone || 'Africa/Abidjan',
+        consent_data_processing: true,
+        website: ''
+      })
+    });
+    const notificationPayload = await notificationResponse.json().catch(() => ({}));
+    if (!notificationResponse.ok) {
+      res.status(502).json({ success: false, error: notificationPayload.error || 'La demande n’a pas pu être envoyée par email.' });
+      return;
+    }
+  } catch {
+    res.status(502).json({ success: false, error: 'Le service email est momentanément indisponible. Votre rendez-vous n’a pas été confirmé.' });
     return;
   }
 
@@ -640,9 +747,10 @@ app.post('/api/appointments', (req: Request, res: Response) => {
     pipeline_stage: 'meeting_scheduled' as const,
     consent_marketing: false,
     consent_data_processing: true,
-    notes: `Rendez-vous visio demandé le ${appointment_date} à ${appointment_time} (heure d’Abidjan, GMT).`,
+    notes: `Rendez-vous ${appointment_mode === 'presentiel' ? 'présentiel' : 'visio'} demandé le ${appointment_date} à ${appointment_time} (heure d’Abidjan, GMT).`,
     appointment_date,
     appointment_time,
+    appointment_mode,
     appointment_timezone: 'Africa/Abidjan',
     created_at: now,
     updated_at: now,
@@ -658,7 +766,7 @@ app.post('/api/appointments', (req: Request, res: Response) => {
 });
 
 // 8. CRM Leads List with Statistics (For internal preview & admin review)
-app.get('/api/leads', async (req: Request, res: Response) => {
+app.get('/api/leads', requireStaff, async (req: Request, res: Response) => {
   try {
     const response = await fetch(`${DJANGO_API_URL}/leads/`, {
       headers: {
@@ -673,7 +781,7 @@ app.get('/api/leads', async (req: Request, res: Response) => {
 });
 
 // 9. Update Lead Pipeline Stage
-app.patch('/api/leads/:id/stage', (req: Request, res: Response) => {
+app.patch('/api/leads/:id/stage', requireStaff, (req: Request, res: Response) => {
   const { stage, notes } = req.body;
   const lead = leadsDatabase.find(l => l.id === req.params.id);
 
@@ -695,7 +803,7 @@ app.patch('/api/leads/:id/stage', (req: Request, res: Response) => {
 });
 
 // 10. Update Apartment (Django Admin simulation sync)
-app.patch('/api/admin/apartment/:id', (req: Request, res: Response) => {
+app.patch('/api/admin/apartment/:id', requireStaff, (req: Request, res: Response) => {
   const { price_fcfa, status, surface_sqm, is_featured } = req.body;
   const apt = apartmentsData.find(a => a.id === req.params.id);
 
@@ -881,7 +989,7 @@ ${faqFacts}
       reply = `Le rez-de-chaussée comprend trois zones de stationnement : Parking 1 et Parking 2 de 42,68 m² chacun, ainsi qu’un Parking 3 de 21,10 m². Le nombre exact de places incluses par lot et leur attribution doivent encore être confirmés.`;
       suggested_actions.push({ label: 'Parler à un conseiller', actionType: 'open_whatsapp' });
     } else if (lower.includes('contact') || lower.includes('téléphone') || lower.includes('whatsapp') || lower.includes('email') || lower.includes('mail')) {
-      reply = `Pour obtenir une réponse commerciale personnalisée, utilisez le bouton WhatsApp du site ou demandez à être mis en relation avec un conseiller. Le numéro et l’adresse e-mail commerciaux doivent être confirmés avant publication définitive.`;
+      reply = `Pour obtenir une réponse commerciale personnalisée, contactez-nous sur WhatsApp au +377 678 63 08 62 ou par e-mail à finance@urielgroup.fr. Vous pouvez aussi demander à être mis en relation avec un conseiller.`;
       suggested_actions.push({ label: 'Parler à un humain', actionType: 'open_whatsapp' });
     } else if (lower.includes('combien de pièce') || lower.includes('nombre de pièce') || lower.includes('chambre')) {
       reply = `Le catalogue public comprend un T2 avec 1 chambre et un T3 avec 2 chambres, chacune avec sa salle d’eau pour le T3. Les lots penthouse sont internes et non commercialisés.`;

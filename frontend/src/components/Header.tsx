@@ -49,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const whatsappNumber = residence?.whatsapp_number || '+2250789001122';
+  const whatsappNumber = residence?.whatsapp_number || '+377678630862';
   const whatsappUrl = buildWhatsAppURL(
     whatsappNumber,
     'Bonjour, je visite le site de la Résidence NOEMA à Angré Djorogobité (Abidjan) et je souhaite obtenir des informations sur les disponibilités.'
@@ -92,8 +92,8 @@ export const Header: React.FC<HeaderProps> = ({
               }
             }}
           >
-            <div className="w-10 h-10 rounded-lg bg-neutral-900 text-white flex items-center justify-center font-serif font-bold text-xl shadow-xs group-hover:bg-neutral-800 transition-colors">
-              N
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black shadow-xs ring-2 ring-[#c48f5f]/60 transition-transform group-hover:scale-105">
+              <img src="./images/LOGO PROMOTTRICE.jpg" alt="Logo Méniger-Bamba Construction et Immobilier" className="h-full w-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2">

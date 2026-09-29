@@ -14,11 +14,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR.parent / '.env')
 load_dotenv(BASE_DIR / '.env', override=False)
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'noema-production-secret-key-change-in-prod-xyz789')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-local-development-only')
 
-DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',') if host.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -44,6 +44,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -121,9 +122,14 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+media_root_setting = Path(os.getenv('MEDIA_ROOT', str(BASE_DIR / 'media')))
+MEDIA_ROOT = media_root_setting if media_root_setting.is_absolute() else (BASE_DIR.parent / media_root_setting).resolve()
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -132,7 +138,20 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('DRF_ANON_RATE', '60/minute'),
+    },
+}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'noema-local-cache',
+    } if DEBUG else {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': os.getenv('DJANGO_CACHE_TABLE', 'django_cache'),
+    }
 }
 
 CORS_ALLOW_CREDENTIALS = True
@@ -145,7 +164,8 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@laresidencenoema.com')
+NOEMA_CONTACT_EMAIL = os.getenv('NOEMA_CONTACT_EMAIL', '')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '')
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -155,6 +175,22 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+SECURE_SSL_REDIRECT = os.getenv('DJANGO_SECURE_SSL_REDIRECT', 'False' if DEBUG else 'True').lower() == 'true'
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() == 'true'
+SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'False').lower() == 'true'
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
-if not DEBUG and SECRET_KEY.startswith('noema-production-secret-key'):
-    raise RuntimeError('DJANGO_SECRET_KEY doit être défini en production.')
+if not DEBUG:
+    if SECRET_KEY.startswith('django-insecure-') or len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5:
+        raise RuntimeError('DJANGO_SECRET_KEY doit contenir au moins 50 caractères aléatoires en production.')
+    if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+        raise RuntimeError('DATABASE_URL ou les paramètres PostgreSQL doivent être configurés en production.')
+    if not NOEMA_CONTACT_EMAIL or not DEFAULT_FROM_EMAIL:
+        raise RuntimeError('NOEMA_CONTACT_EMAIL et DEFAULT_FROM_EMAIL doivent être configurés en production.')
+    if EMAIL_BACKEND.endswith('smtp.EmailBackend') and not EMAIL_HOST:
+        raise RuntimeError('EMAIL_HOST doit être configuré pour l’envoi des emails en production.')
+    if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
+        raise RuntimeError('DJANGO_ALLOWED_HOSTS doit contenir les noms d’hôte publics explicites en production.')

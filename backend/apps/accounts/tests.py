@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.signing import dumps
 from django.test import Client, TestCase, override_settings
+from unittest.mock import patch
 
 
 User = get_user_model()
@@ -58,3 +60,17 @@ class AuthenticationTests(TestCase):
             **self._csrf_headers(),
         )
         self.assertEqual(response.status_code, 429)
+
+    @patch.dict('os.environ', {'GOOGLE_CLIENT_ID': 'client-id', 'GOOGLE_CLIENT_SECRET': 'client-secret'})
+    @patch('apps.accounts.views._google_json_request')
+    def test_google_callback_rejects_state_not_bound_to_session(self, exchange_code):
+        state = dumps({'nonce': 'attacker-controlled'}, salt='noema-google-oauth')
+
+        response = self.client.get(
+            '/api/auth/google/callback/',
+            {'code': 'authorization-code', 'state': state},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('auth_error=google', response['Location'])
+        exchange_code.assert_not_called()

@@ -35,7 +35,7 @@ L'authentification utilise les sessions Django, des cookies HttpOnly, la protect
 - `GET /api/auth/google/start/`
 - `GET /api/auth/google/callback/`
 
-Pour activer Google, renseigner `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` et `GOOGLE_REDIRECT_URI`. En production, définir également `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, les origines CORS/CSRF exactes et les paramètres SMTP. Le bouton Google ne devient actif qu'une fois ces variables configurées.
+Pour activer Google, renseigner `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` et `GOOGLE_REDIRECT_URI`. En production, définir également `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, les origines CORS/CSRF exactes et les paramètres SMTP. Express est le point d’entrée public et relaie `/admin/`, `/static/` et l’authentification vers Django.
 
 ## 🛠️ Installation & Lancement Rapide (Local)
 
@@ -69,6 +69,8 @@ DJANGO_ALLOWED_HOSTS="localhost,127.0.0.1,*"
 ```bash
 python manage.py makemigrations
 python manage.py migrate
+python manage.py createcachetable django_cache
+python manage.py collectstatic --noinput
 python manage.py createsuperuser
 ```
 
@@ -77,6 +79,8 @@ python manage.py createsuperuser
 python manage.py runserver 8000
 ```
 Accédez au back-office d'administration : `http://127.0.0.1:8000/admin/`
+
+En production, configurer `SECURE_PROXY_SSL_HEADER` via les en-têtes `X-Forwarded-Proto` fiables du proxy et définir `TRUST_PROXY_HOPS` pour Express. Les médias téléversés doivent utiliser un volume persistant partagé ou un stockage objet; `collectstatic` ne sauvegarde pas les médias.
 
 ---
 

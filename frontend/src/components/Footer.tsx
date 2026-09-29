@@ -20,7 +20,8 @@ export const Footer: React.FC<FooterProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const whatsappNumber = residence?.whatsapp_number || '+2250789001122';
+  const whatsappNumber = residence?.whatsapp_number || '+377678630862';
+  const emailContact = residence?.email_contact || 'finance@urielgroup.fr';
   const whatsappUrl = buildWhatsAppURL(
     whatsappNumber,
     'Bonjour, je souhaite entrer en contact avec la direction commerciale de la Résidence NOEMA.'
@@ -76,8 +77,8 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Brand Col */}
           <div className="lg:col-span-4 space-y-4 text-left">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#d15a3a] font-serif text-lg font-bold text-white shadow-lg shadow-[#5b3a2e]/20">
-                N
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black shadow-lg shadow-[#5b3a2e]/20 ring-2 ring-[#c48f5f]/50">
+                <img src="./images/LOGO PROMOTTRICE.jpg" alt="Logo Méniger-Bamba Construction et Immobilier" className="h-full w-full object-contain" />
               </div>
               <span className="font-serif text-lg font-bold tracking-[0.18em] text-neutral-900 uppercase">
                 RÉSIDENCE NOEMA
@@ -130,7 +131,7 @@ export const Footer: React.FC<FooterProps> = ({
               </div>
               <div className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-[#d15a3a] shrink-0" />
-                <span>contact@laresidencenoema.com</span>
+                <a href={`mailto:${emailContact}`} className="hover:text-[#d15a3a] hover:underline">{emailContact}</a>
               </div>
             </div>
           </div>
@@ -162,9 +163,11 @@ export const Footer: React.FC<FooterProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center gap-4 text-[11px] text-neutral-500">
-            <span>Politique de Confidentialité (RGPD)</span>
+            <a href="/politique-de-confidentialite/" className="hover:text-[#d15a3a] hover:underline">Politique de Confidentialité</a>
             <span>•</span>
-            <span>Mentions Légales</span>
+            <a href="/mentions-legales/" className="hover:text-[#d15a3a] hover:underline">Mentions légales</a>
+            <span>•</span>
+            <button type="button" onClick={() => window.dispatchEvent(new Event('noema-open-cookie-preferences'))} className="hover:text-[#d15a3a] hover:underline">Gérer mes cookies</button>
             <button
               onClick={scrollToTop}
               className="rounded-lg border border-white/10 bg-white/5 p-2 text-neutral-400 transition-colors hover:bg-[#d15a3a] hover:text-white"

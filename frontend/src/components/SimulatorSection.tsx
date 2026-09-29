@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ArrowRight, Calculator, ChartNoAxesCombined, Home, Landmark, Percent, Wallet } from 'lucide-react';
+import { ArrowRight, Calculator, ChartNoAxesCombined, Home, Wallet } from 'lucide-react';
 import { Apartment } from '../types';
 import { formatFCFA } from '../services/api';
+import { calculateFinancing, financingConfig } from '../services/financing';
 
 interface SimulatorSectionProps {
   apartments: Apartment[];
@@ -11,21 +12,23 @@ interface SimulatorSectionProps {
 const formatCompactFCFA = (value: number) => `${Math.round(value / 1000000).toLocaleString('fr-FR')} M`;
 
 export const SimulatorSection: React.FC<SimulatorSectionProps> = ({ apartments, onOpenSimulator }) => {
-  const sampleApartment = apartments[0] || { id: 'apt-t2-noema', ref: 'NOEMA-T2-ETC-01', name: 'T2 étage courant', price_fcfa: 59000000 };
+  const sampleApartment = apartments[0] || { id: 'apt-t2-noema', ref: 'NOEMA-T2-ETC-01', name: 'T2 étage courant', type: 't2' as const, price_fcfa: 59000000 };
   const price = sampleApartment.price_fcfa;
   const [downPaymentPercent, setDownPaymentPercent] = useState(25);
-  const [durationYears, setDurationYears] = useState(15);
-  const [interestRate, setInterestRate] = useState(6.5);
-  const [rentalYield, setRentalYield] = useState(7.8);
   const [horizonYears, setHorizonYears] = useState(10);
 
   const downPayment = Math.round(price * downPaymentPercent / 100);
-  const loanAmount = price - downPayment;
-  const monthlyRate = interestRate / 100 / 12;
-  const totalMonths = durationYears * 12;
-  const monthlyPayment = Math.round(loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1));
-  const estimatedRent = Math.round(price * rentalYield / 100 / 12);
-  const monthlyCashFlow = estimatedRent - monthlyPayment;
+  const calculation = calculateFinancing({
+    propertyType: sampleApartment.type || 't2',
+    propertyPrice: price,
+    downPayment,
+    durationYears: financingConfig.durationYears,
+    primaryIncome: 0
+  });
+  const loanAmount = calculation.financing.borrowedAmount;
+  const monthlyPayment = calculation.financing.monthlyPayment;
+  const estimatedRent = Math.round(calculation.rental.ownerIncomeFcfa);
+  const monthlyCashFlow = Math.round(calculation.rental.cashFlow);
   const projectedValue = Math.round(price * Math.pow(1.04, horizonYears));
   const years = Array.from({ length: horizonYears + 1 }, (_, year) => year);
   const propertyValues = years.map((year) => price * Math.pow(1.04, year));
@@ -52,9 +55,10 @@ export const SimulatorSection: React.FC<SimulatorSectionProps> = ({ apartments, 
         <div className="grid grid-cols-1 gap-7 lg:grid-cols-12">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-5">
             <Slider label="Apport personnel" value={downPaymentPercent} display={formatFCFA(downPayment)} min={10} max={50} step={5} onChange={setDownPaymentPercent} icon={Wallet} suffix=" %" />
-            <Slider label="Durée du prêt" value={durationYears} display={`${durationYears} ans`} min={5} max={25} step={1} onChange={setDurationYears} icon={Landmark} suffix=" ans" />
-            <Slider label="Taux d’intérêt" value={interestRate} display={`${interestRate.toLocaleString('fr-FR')} %`} min={3} max={12} step={0.1} onChange={setInterestRate} icon={Percent} suffix=" %" />
-            <Slider label="Rendement locatif" value={rentalYield} display={`${rentalYield.toLocaleString('fr-FR')} %`} min={3} max={12} step={0.1} onChange={setRentalYield} icon={ChartNoAxesCombined} suffix=" %" />
+            <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3"><span className="flex items-center gap-2 text-sm text-stone-600"><ChartNoAxesCombined className="h-4 w-4 text-[#b24d31]" />Paramètres bancaires</span><strong className="whitespace-nowrap font-serif text-lg text-stone-900">{financingConfig.durationYears} ans</strong></div>
+              <p className="mt-3 text-xs leading-relaxed text-stone-500">Taux fixe de {(financingConfig.annualInterestRate * 100).toLocaleString('fr-FR')} %, soit {financingConfig.durationYears * 12} mensualités.</p>
+            </div>
             <div className="sm:col-span-2"><Slider label="Horizon de projection" value={horizonYears} display={`${horizonYears} ans`} min={5} max={20} step={1} onChange={setHorizonYears} icon={Home} suffix=" ans" /></div>
           </div>
 
@@ -64,7 +68,7 @@ export const SimulatorSection: React.FC<SimulatorSectionProps> = ({ apartments, 
               <Metric label="Mensualité estimée" value={formatFCFA(monthlyPayment)} />
               <Metric label="Loyer mensuel cible" value={formatFCFA(estimatedRent)} />
               <Metric label="Flux de trésorerie / mois" value={`${monthlyCashFlow >= 0 ? '+' : ''}${formatFCFA(monthlyCashFlow)}`} positive={monthlyCashFlow >= 0} />
-              <Metric label="Rendement brut" value={`${rentalYield.toLocaleString('fr-FR')} %`} />
+              <Metric label="Part propriétaire" value="80 % des revenus locatifs" />
               <Metric label={`Valeur estimée à ${horizonYears} ans`} value={formatFCFA(projectedValue)} accent />
             </div>
 

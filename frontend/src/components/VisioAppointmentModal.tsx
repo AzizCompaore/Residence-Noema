@@ -1,5 +1,6 @@
 import React, { FormEvent, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock3, Video, X } from 'lucide-react';
+import { ensureCsrfToken, getCookie } from '../services/api';
 
 interface VisioAppointmentModalProps {
   isOpen: boolean;
@@ -25,7 +26,10 @@ export const VisioAppointmentModal: React.FC<VisioAppointmentModalProps> = ({ is
     phone_whatsapp: '',
     appointment_date: '',
     appointment_time: '',
-    timezone: 'Africa/Abidjan'
+    timezone: 'Africa/Abidjan',
+    appointment_mode: 'visio' as 'visio' | 'presentiel'
+    ,consent_data_processing: false
+    ,website: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -45,9 +49,11 @@ export const VisioAppointmentModal: React.FC<VisioAppointmentModalProps> = ({ is
     setError('');
 
     try {
+      await ensureCsrfToken();
       const response = await fetch('/api/appointments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...(getCookie('csrftoken') ? { 'X-CSRFToken': getCookie('csrftoken') as string } : {}) },
         body: JSON.stringify(form)
       });
       const result = await response.json();
@@ -90,6 +96,19 @@ export const VisioAppointmentModal: React.FC<VisioAppointmentModalProps> = ({ is
               <label className="text-xs font-semibold text-neutral-700">Prénom<input required value={form.first_name} onChange={(event) => updateField('first_name', event.target.value)} className="mt-1.5 w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
               <label className="text-xs font-semibold text-neutral-700">Nom<input required value={form.last_name} onChange={(event) => updateField('last_name', event.target.value)} className="mt-1.5 w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
             </div>
+            <fieldset>
+              <legend className="text-xs font-semibold text-neutral-700">Type de rendez-vous</legend>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-xs transition-colors ${form.appointment_mode === 'visio' ? 'border-[#d15a3a] bg-[#fff5ef]' : 'border-neutral-200 bg-white'}`}>
+                  <input type="radio" name="appointment_mode" value="visio" checked={form.appointment_mode === 'visio'} onChange={() => setForm((current) => ({ ...current, appointment_mode: 'visio' }))} className="mt-0.5 accent-[#d15a3a]" />
+                  <span><strong className="block text-neutral-800">Rendez-vous visio</strong><span className="mt-0.5 block text-neutral-500">À distance, par visioconférence</span></span>
+                </label>
+                <label className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-xs transition-colors ${form.appointment_mode === 'presentiel' ? 'border-[#d15a3a] bg-[#fff5ef]' : 'border-neutral-200 bg-white'}`}>
+                  <input type="radio" name="appointment_mode" value="presentiel" checked={form.appointment_mode === 'presentiel'} onChange={() => setForm((current) => ({ ...current, appointment_mode: 'presentiel' }))} className="mt-0.5 accent-[#d15a3a]" />
+                  <span><strong className="block text-neutral-800">Rendez-vous présentiel</strong><span className="mt-0.5 block text-neutral-500">Au bureau de vente, à Abidjan</span></span>
+                </label>
+              </div>
+            </fieldset>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="text-xs font-semibold text-neutral-700">Email<input required type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} className="mt-1.5 w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
               <label className="text-xs font-semibold text-neutral-700">WhatsApp<input required type="tel" value={form.phone_whatsapp} onChange={(event) => updateField('phone_whatsapp', event.target.value)} className="mt-1.5 w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" /></label>
@@ -99,8 +118,10 @@ export const VisioAppointmentModal: React.FC<VisioAppointmentModalProps> = ({ is
               <label className="text-xs font-semibold text-neutral-700"><span className="flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 text-emerald-700" />Heure souhaitée</span><select required={!customTime} value={customTime ? 'other' : form.appointment_time} onChange={(event) => { const value = event.target.value; setCustomTime(value === 'other'); if (value !== 'other') updateField('appointment_time', value); else updateField('appointment_time', ''); }} className="mt-1.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"><option value="">Choisir une heure</option>{appointmentTimes.map((time) => <option key={time} value={time}>{time.replace(':', 'h')} (Abidjan)</option>)}<option value="other">Autre heure ouvrée</option></select>{customTime && <input required type="time" min="09:00" max="17:59" value={form.appointment_time} onChange={(event) => updateField('appointment_time', event.target.value)} className="mt-2 w-full rounded-lg border border-neutral-200 px-3 py-2.5 text-sm font-normal outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />}</label>
             </div>
             <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-xs text-emerald-900"><Clock3 className="h-4 w-4 shrink-0 text-emerald-700" /><span>Créneaux proposés en heure locale d'Abidjan (GMT).</span></div>
+            <label className="flex items-start gap-2 text-[11px] leading-5 text-neutral-600"><input required type="checkbox" checked={form.consent_data_processing} onChange={(event) => setForm((current) => ({ ...current, consent_data_processing: event.target.checked }))} className="mt-1 accent-neutral-900" /><span>J’accepte que mes données soient utilisées pour traiter cette demande, conformément à la <a href="/politique-de-confidentialite/" className="font-semibold underline">politique de confidentialité</a>.</span></label>
+            <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={form.website} onChange={(event) => updateField('website', event.target.value)} className="absolute left-[-10000px] h-px w-px opacity-0" />
             {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{error}</p>}
-            <button disabled={isSubmitting} type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"><Video className="h-4 w-4" />{isSubmitting ? 'Enregistrement...' : 'Réserver mon rendez-vous visio'}</button>
+            <button disabled={isSubmitting} type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"><Video className="h-4 w-4" />{isSubmitting ? 'Enregistrement...' : 'Réserver mon rendez-vous'}</button>
             <p className="text-center text-[11px] text-neutral-400">Le créneau sera confirmé par notre équipe commerciale.</p>
           </form>
         )}

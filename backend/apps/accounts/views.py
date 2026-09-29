@@ -210,7 +210,9 @@ def google_start(request):
     if not _google_configured():
         missing = [key for key in ('GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET') if not os.getenv(key)]
         return JsonResponse({'error': f"La connexion Google n’est pas configurée. Variable(s) manquante(s) : {', '.join(missing)}."}, status=503)
-    state = dumps({'nonce': secrets.token_urlsafe(32)}, salt='noema-google-oauth')
+    state_nonce = secrets.token_urlsafe(32)
+    request.session['google_oauth_state_nonce'] = state_nonce
+    state = dumps({'nonce': state_nonce}, salt='noema-google-oauth')
     params = {
         'client_id': os.environ['GOOGLE_CLIENT_ID'],
         'redirect_uri': _google_redirect_uri(request),
@@ -239,8 +241,11 @@ def google_callback(request):
     frontend_url = _frontend_url(request)
     state = request.GET.get('state', '')
     try:
-        loads(state, salt='noema-google-oauth', max_age=600)
+        state_payload = loads(state, salt='noema-google-oauth', max_age=600)
     except (BadSignature, SignatureExpired):
+        return redirect(f'{frontend_url}/?auth_error=google')
+    expected_nonce = request.session.pop('google_oauth_state_nonce', '')
+    if not expected_nonce or not secrets.compare_digest(state_payload.get('nonce', ''), expected_nonce):
         return redirect(f'{frontend_url}/?auth_error=google')
     if not _google_configured() or request.GET.get('error') or not request.GET.get('code'):
         return redirect(f'{frontend_url}/?auth_error=google')

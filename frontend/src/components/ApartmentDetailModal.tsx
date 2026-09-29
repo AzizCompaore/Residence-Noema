@@ -30,7 +30,7 @@ export const ApartmentDetailModal: React.FC<ApartmentDetailModalProps> = ({
   apartment,
   onClose,
   onSelectForSimulation,
-  whatsappNumber = '+2250789001122'
+  whatsappNumber = '+377678630862'
 }) => {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [isDoorOpen, setIsDoorOpen] = useState(false);

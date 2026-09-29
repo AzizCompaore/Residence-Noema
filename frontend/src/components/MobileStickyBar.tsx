@@ -9,7 +9,7 @@ interface MobileStickyBarProps {
 
 export const MobileStickyBar: React.FC<MobileStickyBarProps> = ({
   onOpenSimulator,
-  whatsappNumber = '+2250789001122'
+  whatsappNumber = '+377678630862'
 }) => {
   const whatsappUrl = buildWhatsAppURL(
     whatsappNumber,

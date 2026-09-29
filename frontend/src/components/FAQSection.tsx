@@ -10,7 +10,7 @@ interface FAQSectionProps {
 
 export const FAQSection: React.FC<FAQSectionProps> = ({ 
   faqs, 
-  whatsappNumber = '+2250789001122' 
+  whatsappNumber = '+377678630862'
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
