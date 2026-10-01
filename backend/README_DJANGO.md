@@ -76,9 +76,15 @@ python manage.py createsuperuser
 
 ### 5. Lancement du serveur Django
 ```bash
-python manage.py runserver 8000
+# Windows PowerShell
+python manage.py runserver 127.0.0.1:8000
+
+# Linux / macOS
+python manage.py runserver 127.0.0.1:8000
 ```
 Accédez au back-office d'administration : `http://127.0.0.1:8000/admin/`
+
+`DJANGO_DEBUG=True` est requis dans le `.env` local pour utiliser la clé de développement. En production, laisser `DJANGO_DEBUG=False` et fournir une clé `DJANGO_SECRET_KEY` aléatoire d'au moins 50 caractères; ne jamais publier le fichier `.env`.
 
 En production, configurer `SECURE_PROXY_SSL_HEADER` via les en-têtes `X-Forwarded-Proto` fiables du proxy et définir `TRUST_PROXY_HOPS` pour Express. Les médias téléversés doivent utiliser un volume persistant partagé ou un stockage objet; `collectstatic` ne sauvegarde pas les médias.
 
