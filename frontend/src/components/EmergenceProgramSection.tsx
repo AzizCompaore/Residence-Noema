@@ -1,5 +1,5 @@
 import React from 'react';
-import { Landmark, Building, Sparkles } from 'lucide-react';
+import { Landmark, Sparkles } from 'lucide-react';
 
 export const EmergenceProgramSection: React.FC = () => {
   return (
@@ -41,16 +41,13 @@ export const EmergenceProgramSection: React.FC = () => {
           </div>
 
           <div className="lg:col-span-5">
-            <div className="rounded-2xl bg-neutral-900 p-8 sm:p-10 text-center space-y-2">
-              <Building className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-              <p className="text-5xl font-serif font-bold text-white">180</p>
-              <p className="text-sm text-neutral-300 uppercase tracking-wider font-semibold">
-                Logements visés à terme
-              </p>
-              <p className="text-xs text-neutral-400 pt-3 leading-relaxed">
-                NOEMA en est la première réalisation.
-              </p>
-            </div>
+            <img
+              src="./images/Image 180 logement.jpeg"
+              alt="Programme Émergence : 180 logements visés à terme"
+              loading="lazy"
+              decoding="async"
+              className="aspect-square w-full rounded-2xl object-contain"
+            />
           </div>
 
         </div>

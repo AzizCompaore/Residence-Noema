@@ -92,19 +92,16 @@ export const Header: React.FC<HeaderProps> = ({
               }
             }}
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black shadow-xs ring-2 ring-[#c48f5f]/60 transition-transform group-hover:scale-105">
-              <img src="./images/LOGO PROMOTTRICE.jpg" alt="Logo Méniger-Bamba Construction et Immobilier" className="h-full w-full object-contain" />
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-[#e5b932] bg-white shadow-sm transition-transform group-hover:scale-[1.03]">
+              <img
+                src="./images/LOGO 01.jpg"
+                alt="Résidence NOEMA"
+                className="h-full w-full scale-[1.3] object-cover"
+                fetchPriority="high"
+                decoding="async"
+              />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-serif tracking-widest text-lg font-bold text-neutral-900 uppercase">
-                  NOEMA
-                </span>
-              </div>
-              <span className="text-xs text-neutral-500 block font-normal -mt-0.5">
-                Résidence d'Exception • Abidjan
-              </span>
-            </div>
+            <span className="max-w-28 text-xs leading-tight text-neutral-500">Résidence d'Exception • Abidjan</span>
           </a>
 
           {/* Desktop Navigation Links */}
