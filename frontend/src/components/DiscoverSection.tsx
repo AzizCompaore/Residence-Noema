@@ -10,12 +10,16 @@ const commonAreaImages = [
   { file: 'Hall.webp', label: "Hall d'entrée" },
   { file: 'Hall 180cm.webp', label: "Vue du hall" },
   { file: 'Hall 180cm (2).webp', label: "Hall et circulation" },
-  { file: 'Hall boîte aux lettres.webp', label: 'Boîtes aux lettres' },
+  { file: 'Hall boite aux lettres.webp', label: 'Boîtes aux lettres' },
   { file: 'Hall escalier.webp', label: 'Escalier du hall' },
   { file: 'Vue ascenseur hall.webp', label: 'Ascenseur et hall' },
-  { file: 'Piscine.webp', label: 'Piscine' },
+  { file: 'piscine.png', label: 'Piscine' },
+  { file: 'salle de sport.jpeg', label: 'Salle de sport' },
   { file: 'vue du parking.webp', label: 'Vue du parking' }
 ];
+
+const commonAreaImageUrl = (file: string) =>
+  `./images/${['Dossier Hall piscine et parking', file].map(encodeURIComponent).join('/')}`;
 
 export const DiscoverSection: React.FC<DiscoverSectionProps> = () => {
   const [activeCommonArea, setActiveCommonArea] = useState(0);
@@ -55,7 +59,7 @@ export const DiscoverSection: React.FC<DiscoverSectionProps> = () => {
             <div className="relative min-h-[380px] sm:min-h-[520px] overflow-hidden rounded-xl bg-neutral-900">
               <img
                 key={activeImage.file}
-                src={`./images/Dossier Hall piscine et parking/${activeImage.file}`}
+                src={commonAreaImageUrl(activeImage.file)}
                 alt={`${activeImage.label} de la Résidence NOEMA`}
                 loading="lazy"
                 decoding="async"
@@ -99,7 +103,7 @@ export const DiscoverSection: React.FC<DiscoverSectionProps> = () => {
                   className={`group relative aspect-[4/3] overflow-hidden rounded-lg border-2 bg-neutral-100 transition-all duration-300 ${activeCommonArea === index ? 'border-emerald-600 shadow-lg opacity-100' : 'border-transparent opacity-70 hover:border-neutral-300 hover:opacity-100'}`}
                 >
                   <img
-                    src={`./images/Dossier Hall piscine et parking/${image.file}`}
+                    src={commonAreaImageUrl(image.file)}
                     alt=""
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
